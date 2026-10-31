@@ -136,7 +136,8 @@ public class CommandService extends AccessibilityService {
                     boolean ok;
                     if ("enter".equals(key)) {
                         AccessibilityNodeInfo focus = findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
-                        ok = focus != null && focus.performAction(AccessibilityNodeInfo.ACTION_IME_ENTER);
+                        ok = focus != null && focus.performAction(
+                                AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.getId());
                     } else if ("home".equals(key)) {
                         ok = performGlobalAction(GLOBAL_ACTION_HOME);
                     } else if ("recents".equals(key)) {
