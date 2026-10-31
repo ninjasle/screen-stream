@@ -49,6 +49,11 @@ public class MainActivity extends Activity {
         start.setOnClickListener(v -> begin());
         root.addView(start, match());
 
+        Button acc = new Button(this);
+        acc.setText("开启无障碍遥控");
+        acc.setOnClickListener(v -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+        root.addView(acc, match());
+
         Button stop = new Button(this);
         stop.setText("停止共享");
         stop.setOnClickListener(v -> {
@@ -81,11 +86,21 @@ public class MainActivity extends Activity {
                 == PackageManager.PERMISSION_GRANTED;
     }
 
+    private boolean a11yOn() {
+        String flat = Settings.Secure.getString(getContentResolver(),
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        return flat != null && flat.contains(getPackageName() + "/" + CommandService.class.getName());
+    }
+
     private void refresh() {
         boolean storage = canWrite();
-        status.setText(storage
+        String s = storage
                 ? "存储权限已就绪，进入 DSHBox/screenstream 写帧"
-                : "需要「所有文件访问」权限，点开始会跳到设置");
+                : "需要「所有文件访问」权限，点开始会跳到设置";
+        if (!a11yOn()) {
+            s += "\n无障碍遥控未开启：操作会失败，点「开启无障碍遥控」";
+        }
+        status.setText(s);
     }
 
     private void begin() {

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ScreenStream</string>
+    <string name="acc_desc">执行 DSHBox/screenstream/cmd.json 里的点击、滑动、输入命令。只在本机读写该目录。</string>
+</resources>
