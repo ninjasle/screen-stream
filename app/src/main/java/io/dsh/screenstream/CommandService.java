@@ -124,6 +124,22 @@ public class CommandService extends AccessibilityService {
                     gesture(p, Math.max(60L, dur), done);
                     break;
                 }
+                case "pinch": {
+                    // 双指缩放：两根 stroke 同时派发即多指
+                    float cx = (float) step.optDouble("x", 0);
+                    float cy = (float) step.optDouble("y", 0);
+                    float startGap = (float) step.optDouble("startGap", 300);
+                    float endGap = (float) step.optDouble("endGap", 600);
+                    long dur = (long) step.optDouble("durationMs", 300);
+                    Path a = new Path();
+                    a.moveTo(cx - startGap / 2f, cy);
+                    a.lineTo(cx - endGap / 2f, cy);
+                    Path b = new Path();
+                    b.moveTo(cx + startGap / 2f, cy);
+                    b.lineTo(cx + endGap / 2f, cy);
+                    gestureMulti(new Path[]{a, b}, Math.max(80L, dur), done);
+                    break;
+                }
                 case "text": {
                     String text = step.optString("text", "");
                     boolean ok = setText(text);
@@ -205,7 +221,34 @@ public class CommandService extends AccessibilityService {
     private Path tapPath(float x, float y) {
         Path p = new Path();
         p.moveTo(x, y);
+        // 零长度 stroke 在部分 ROM 上会被丢弃，补 1px 位移
+        p.lineTo(x + 1f, y + 1f);
         return p;
+    }
+
+    private boolean gestureMulti(Path[] paths, long durationMs, Runnable done) {
+        GestureDescription.Builder builder = new GestureDescription.Builder();
+        for (Path p : paths) {
+            builder.addStroke(new GestureDescription.StrokeDescription(p, 0L, durationMs));
+        }
+        boolean dispatched = dispatchGesture(builder.build(),
+                new GestureResultCallback() {
+                    @Override
+                    public void onCompleted(GestureDescription g) {
+                        writeResult(true, "gesture ok");
+                        done.run();
+                    }
+
+                    @Override
+                    public void onCancelled(GestureDescription g) {
+                        writeResult(false, "gesture cancelled");
+                        done.run();
+                    }
+                }, handler);
+        if (!dispatched) {
+            writeResult(false, "dispatch rejected");
+        }
+        return dispatched;
     }
 
     private boolean gesture(Path path, long durationMs, Runnable done) {
