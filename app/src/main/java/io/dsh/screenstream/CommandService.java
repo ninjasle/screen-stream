@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.content.Intent;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -140,10 +141,20 @@ public class CommandService extends AccessibilityService {
                     gestureMulti(new Path[]{a, b}, Math.max(80L, dur), done);
                     break;
                 }
+                case "nodes": {
+                    StringBuilder sb = new StringBuilder();
+                    AccessibilityNodeInfo r0 = getRootInActiveWindow();
+                    if (r0 != null) dumpTree(r0, sb, 0);
+                    writeNodes(sb.toString());
+                    writeResult(true, "nodes dumped");
+                    done.run();
+                    break;
+                }
                 case "text": {
                     String text = step.optString("text", "");
                     boolean ok = setText(text);
-                    writeResult(true, ok ? "text set" : "no focused input");
+                    writeResult(true, ok ? "text set" : "no editable node");
+                    if (!ok) writeNodes(lastDump);
                     done.run();
                     break;
                 }
@@ -277,14 +288,56 @@ public class CommandService extends AccessibilityService {
     }
 
     private boolean setText(String text) {
-        AccessibilityNodeInfo focus = findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
-        if (focus == null && getRootInActiveWindow() != null) {
-            focus = getRootInActiveWindow().findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        AccessibilityNodeInfo target = findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
+        if (target == null && root != null) {
+            target = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT);
         }
-        if (focus == null) return false;
+        if (target == null && root != null) {
+            target = findEditable(root, 0);
+        }
+        if (target == null) {
+            StringBuilder sb = new StringBuilder();
+            if (root != null) dumpTree(root, sb, 0);
+            lastDump = sb.toString();
+            return false;
+        }
         Bundle args = new Bundle();
         args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
-        return focus.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+        boolean ok = target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+        if (!ok) {
+            target.performAction(AccessibilityNodeInfo.ACTION_FOCUS);
+            ok = target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+        }
+        return ok;
+    }
+
+    private String lastDump = "";
+
+    private AccessibilityNodeInfo findEditable(AccessibilityNodeInfo node, int depth) {
+        if (node == null || depth > 40) return null;
+        if (node.isEditable() && node.isVisibleToUser()) return node;
+        int n = node.getChildCount();
+        for (int i = 0; i < n; i++) {
+            AccessibilityNodeInfo found = findEditable(node.getChild(i), depth + 1);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    private void dumpTree(AccessibilityNodeInfo node, StringBuilder sb, int depth) {
+        if (node == null || depth > 40 || sb.length() > 200000) return;
+        Rect r = new Rect();
+        node.getBoundsInScreen(r);
+        sb.append(depth).append('|').append(node.getClassName())
+          .append('|').append(node.isEditable() ? "E" : "-")
+          .append('|').append(node.isFocused() ? "F" : "-")
+          .append('|').append(r.toShortString())
+          .append('|').append(node.getText())
+          .append('|').append(node.getContentDescription())
+          .append('\n');
+        int n = node.getChildCount();
+        for (int i = 0; i < n; i++) dumpTree(node.getChild(i), sb, depth + 1);
     }
 
     private AccessibilityNodeInfo findNode(AccessibilityNodeInfo node, String needle) {
@@ -300,6 +353,20 @@ public class CommandService extends AccessibilityService {
             if (found != null) return found;
         }
         return null;
+    }
+
+    private void writeNodes(String content) {
+        try {
+            File tmp = new File(dir, "nodes.txt.tmp");
+            try (FileOutputStream out = new FileOutputStream(tmp);
+                 Writer w = new OutputStreamWriter(out, StandardCharsets.UTF_8)) {
+                w.write(content);
+            }
+            File dst = new File(dir, "nodes.txt");
+            if (dst.exists()) dst.delete();
+            tmp.renameTo(dst);
+        } catch (Throwable ignored) {
+        }
     }
 
     private void writeResult(boolean ok, String message) {
