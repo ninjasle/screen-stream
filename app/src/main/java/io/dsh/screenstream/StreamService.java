@@ -39,7 +39,7 @@ public class StreamService extends Service {
     private static final String CHANNEL_ID = "stream";
     private static final int NOTIFICATION_ID = 7001;
     private static final int FPS = 15;
-    private static final long FRAME_INTERVAL_MS = 1000L / FPS;
+    private static final long FRAME_INTERVAL_MS = 0L;
     private static final int TARGET_WIDTH = 720;
     private static final int JPEG_QUALITY = 70;
 
@@ -55,6 +55,7 @@ public class StreamService extends Service {
     private File outDir;
     private long lastAccepted;
     private long sequence;
+    private long incoming;
     private final AtomicBoolean writing = new AtomicBoolean(false);
 
     @Override
@@ -136,7 +137,7 @@ public class StreamService extends Service {
         captureThread.start();
         captureHandler = new Handler(captureThread.getLooper());
 
-        reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
+        reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 3);
         reader.setOnImageAvailableListener(this::onImageAvailable, captureHandler);
         display = projection.createVirtualDisplay(
                 "screenstream", width, height, metrics.densityDpi,
@@ -157,8 +158,9 @@ public class StreamService extends Service {
             return;
         }
 
+        incoming++;
         long now = SystemClock.elapsedRealtime();
-        if (now - lastAccepted < FRAME_INTERVAL_MS) {
+        if (FRAME_INTERVAL_MS > 0 && now - lastAccepted < FRAME_INTERVAL_MS) {
             image.close();
             return;
         }
@@ -238,7 +240,9 @@ public class StreamService extends Service {
                     + ",\"ts\":" + System.currentTimeMillis()
                     + ",\"width\":" + width
                     + ",\"height\":" + height
-                    + ",\"fps\":" + FPS + "}");
+                    + ",\"fps\":" + FPS
+                    + ",\"in\":" + incoming
+                    + ",\"out\":" + sequence + "}");
         } catch (Throwable t) {
             Log.e(TAG, "write meta failed", t);
             return;

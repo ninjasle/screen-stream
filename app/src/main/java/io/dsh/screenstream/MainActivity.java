@@ -19,6 +19,7 @@ import android.widget.TextView;
 public class MainActivity extends Activity {
     private static final int REQ_PROJECTION = 1001;
     private static final int REQ_NOTIFICATIONS = 1002;
+    private static final int REQ_STORAGE = 1003;
 
     private TextView status;
 
@@ -72,15 +73,27 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 
+    private boolean canWrite() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            return Environment.isExternalStorageManager();
+        }
+        return checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
     private void refresh() {
-        boolean storage = Environment.isExternalStorageManager();
+        boolean storage = canWrite();
         status.setText(storage
                 ? "存储权限已就绪，进入 DSHBox/screenstream 写帧"
                 : "需要「所有文件访问」权限，点开始会跳到设置");
     }
 
     private void begin() {
-        if (!Environment.isExternalStorageManager()) {
+        if (!canWrite()) {
+            if (Build.VERSION.SDK_INT < 30) {
+                requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_STORAGE);
+                return;
+            }
             Intent grant = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
             grant.setData(Uri.parse("package:" + getPackageName()));
             try {
@@ -114,7 +127,7 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
-        if (requestCode == REQ_NOTIFICATIONS) {
+        if (requestCode == REQ_NOTIFICATIONS || requestCode == REQ_STORAGE) {
             begin();
         }
     }
